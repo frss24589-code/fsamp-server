@@ -19,6 +19,7 @@ const mapaCanais = {
 };
 
 let clientes = new Map();
+let estadoNoArAtual = false;
 
 function enviarListaOnline() {
     const online = [];
@@ -29,6 +30,16 @@ function enviarListaOnline() {
     for (let info of clientes.values()) {
         if (info.ws.readyState === 1) {
             info.ws.send(mensagem);
+        }
+    }
+}
+
+function transmitirEstadoNoAr(ativo) {
+    estadoNoArAtual = !!ativo;
+    const aviso = JSON.stringify({ tipo: 'NO_AR', ativo: estadoNoArAtual });
+    for (let info of clientes.values()) {
+        if (info.ws.readyState === 1) {
+            info.ws.send(aviso);
         }
     }
 }
@@ -53,8 +64,12 @@ wss.on('connection', (ws) => {
                     remetente.canalId = mapaCanais[msg.papel] ?? 0;
                     console.log(`🎙️ [FSAMP] ${msg.papel} entrou na central.`);
                     enviarListaOnline();
+                    ws.send(JSON.stringify({ tipo: 'NO_AR', ativo: estadoNoArAtual }));
                 } else if (msg.tipo === 'PING') {
                     ws.send(JSON.stringify({ tipo: 'PONG' }));
+                } else if (msg.tipo === 'NO_AR') {
+                    console.log(`🔴 [FSAMP] Comando NO AR: ${msg.ativo ? 'ATIVADO' : 'ENCERRADO'} por ${remetente.papel}`);
+                    transmitirEstadoNoAr(msg.ativo);
                 }
             } catch (e) { }
             return;
