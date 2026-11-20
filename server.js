@@ -74,6 +74,10 @@ wss.on('connection', (ws) => {
             } catch (e) { }
             return;
         }
+     if (!remetente.audioLogado) {
+         remetente.audioLogado = true;
+         console.log(`🎵 [FSAMP] Áudio binário recebido de ${remetente.papel} (${dados.length} bytes)`);
+     }
 
         const bufferOriginal = Buffer.from(dados);
         const pacoteEtiquetado = Buffer.allocUnsafe(bufferOriginal.length + 1);
