@@ -67,6 +67,9 @@ wss.on('connection', (ws) => {
                     ws.send(JSON.stringify({ tipo: 'NO_AR', ativo: estadoNoArAtual }));
                 } else if (msg.tipo === 'PING') {
                     ws.send(JSON.stringify({ tipo: 'PONG' }));
+                                } else if (msg.tipo === 'DIAG') {
+                 console.log(`🔍 [DIAG] ${msg.papel} | taxa=${msg.taxa} | ctx=${msg.state}`);
+ 
                 } else if (msg.tipo === 'NO_AR') {
                     console.log(`🔴 [FSAMP] Comando NO AR: ${msg.ativo ? 'ATIVADO' : 'ENCERRADO'} por ${remetente.papel}`);
                     transmitirEstadoNoAr(msg.ativo);
