@@ -5,7 +5,7 @@ const porta = process.env.PORT || 8080;
 
 const servidorHttp = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('FSAMP-LINK-AUDIO Central Ativa');
+    res.end('FSAMP-LINK-AUDIO Central WebRTC Opus 48kHz Ativa');
 });
 
 const wss = new WebSocketServer({ server: servidorHttp, perMessageDeflate: false });
@@ -44,9 +44,18 @@ function transmitirEstadoNoAr(ativo) {
     }
 }
 
+function enviarParaPapel(papelDestino, objetoMsg) {
+    const texto = JSON.stringify(objetoMsg);
+    for (let info of clientes.values()) {
+        if (info.papel === papelDestino && info.ws.readyState === 1) {
+            info.ws.send(texto);
+        }
+    }
+}
+
 wss.on('connection', (ws) => {
     const idConexao = Math.random().toString(36).substring(2, 9);
-    clientes.set(idConexao, { ws, papel: null, canalId: 0, audioLogado: false });
+    clientes.set(idConexao, { ws, papel: null, canalId: 0 });
 
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
@@ -59,23 +68,15 @@ wss.on('connection', (ws) => {
             const texto = dados.toString();
             const msg = JSON.parse(texto);
 
-            if (msg.tipo === 'AUDIO' && msg.d) {
-                if (!remetente.audioLogado) {
-                    remetente.audioLogado = true;
-                    console.log(`🎵 [FSAMP] Áudio recebido de ${remetente.papel} (${msg.d.length} chars)`);
-                }
-
-                const pacoteRepasse = JSON.stringify({
-                    tipo: 'AUDIO',
-                    c: remetente.canalId,
-                    t: msg.t || 44,
-                    d: msg.d
-                });
-
-                for (let [id, destino] of clientes.entries()) {
-                    if (id !== idConexao && destino.ws.readyState === 1) {
-                        destino.ws.send(pacoteRepasse);
-                    }
+            // Roteamento de conexão direta WebRTC (Ponto a Ponto)
+            if (msg.tipo === 'WEBRTC_OFERTA' || msg.tipo === 'WEBRTC_RESPOSTA' || msg.tipo === 'WEBRTC_ICE') {
+                if (msg.para && remetente.papel) {
+                    enviarParaPapel(msg.para, {
+                        tipo: msg.tipo,
+                        de: remetente.papel,
+                        canalId: remetente.canalId,
+                        dados: msg.dados
+                    });
                 }
                 return;
             }
@@ -89,7 +90,7 @@ wss.on('connection', (ws) => {
             } else if (msg.tipo === 'PING') {
                 ws.send(JSON.stringify({ tipo: 'PONG' }));
             } else if (msg.tipo === 'DIAG') {
-                console.log(`🔍 [DIAG] ${msg.papel} | taxa=${msg.taxa} | ctx=${msg.state}`);
+                console.log(`🔍 [DIAG] ${msg.papel} | modo=${msg.taxa} | status=${msg.state}`);
             } else if (msg.tipo === 'NO_AR') {
                 console.log(`🔴 [FSAMP] Comando NO AR: ${msg.ativo ? 'ATIVADO' : 'ENCERRADO'} por ${remetente.papel}`);
                 transmitirEstadoNoAr(msg.ativo);
@@ -116,5 +117,5 @@ setInterval(() => {
 }, 10000);
 
 servidorHttp.listen(porta, () => {
-    console.log(`🔊 Central FSAMP-LINK-AUDIO rodando na porta ${porta}`);
+    console.log(`🔊 Central FSAMP-LINK-AUDIO WebRTC Opus 48kHz rodando na porta ${porta}`);
 });
