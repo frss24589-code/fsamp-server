@@ -8,7 +8,7 @@ const servidorHttp = http.createServer((req, res) => {
     res.end('FSAMP-LINK-AUDIO Central Ativa');
 });
 
-const wss = new WebSocketServer({ server: servidorHttp });
+const wss = new WebSocketServer({ server: servidorHttp, perMessageDeflate: false });
 
 const mapaCanais = {
     'ESTUDIO': 0,
