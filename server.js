@@ -46,52 +46,55 @@ function transmitirEstadoNoAr(ativo) {
 
 wss.on('connection', (ws) => {
     const idConexao = Math.random().toString(36).substring(2, 9);
-    clientes.set(idConexao, { ws, papel: null, canalId: 0 });
+    clientes.set(idConexao, { ws, papel: null, canalId: 0, audioLogado: false });
 
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
 
-    ws.on('message', (dados, isBinary) => {
+    ws.on('message', (dados) => {
         const remetente = clientes.get(idConexao);
         if (!remetente) return;
 
-        if (!isBinary) {
-            try {
-                const texto = dados.toString();
-                const msg = JSON.parse(texto);
-                if (msg.tipo === 'ENTRAR' && msg.papel) {
-                    remetente.papel = msg.papel;
-                    remetente.canalId = mapaCanais[msg.papel] ?? 0;
-                    console.log(`🎙️ [FSAMP] ${msg.papel} entrou na central.`);
-                    enviarListaOnline();
-                    ws.send(JSON.stringify({ tipo: 'NO_AR', ativo: estadoNoArAtual }));
-                } else if (msg.tipo === 'PING') {
-                    ws.send(JSON.stringify({ tipo: 'PONG' }));
-                                } else if (msg.tipo === 'DIAG') {
-                 console.log(`🔍 [DIAG] ${msg.papel} | taxa=${msg.taxa} | ctx=${msg.state}`);
- 
-                } else if (msg.tipo === 'NO_AR') {
-                    console.log(`🔴 [FSAMP] Comando NO AR: ${msg.ativo ? 'ATIVADO' : 'ENCERRADO'} por ${remetente.papel}`);
-                    transmitirEstadoNoAr(msg.ativo);
+        try {
+            const texto = dados.toString();
+            const msg = JSON.parse(texto);
+
+            if (msg.tipo === 'AUDIO' && msg.d) {
+                if (!remetente.audioLogado) {
+                    remetente.audioLogado = true;
+                    console.log(`🎵 [FSAMP] Áudio recebido de ${remetente.papel} (${msg.d.length} chars)`);
                 }
-            } catch (e) { }
-            return;
-        }
-     if (!remetente.audioLogado) {
-         remetente.audioLogado = true;
-         console.log(`🎵 [FSAMP] Áudio binário recebido de ${remetente.papel} (${dados.length} bytes)`);
-     }
 
-        const bufferOriginal = Buffer.from(dados);
-        const pacoteEtiquetado = Buffer.allocUnsafe(bufferOriginal.length + 1);
-        pacoteEtiquetado.writeUInt8(remetente.canalId, 0);
-        bufferOriginal.copy(pacoteEtiquetado, 1);
+                const pacoteRepasse = JSON.stringify({
+                    tipo: 'AUDIO',
+                    c: remetente.canalId,
+                    t: msg.t || 44,
+                    d: msg.d
+                });
 
-        for (let [id, destino] of clientes.entries()) {
-            if (id !== idConexao && destino.ws.readyState === 1) {
-                destino.ws.send(pacoteEtiquetado, { binary: true });
+                for (let [id, destino] of clientes.entries()) {
+                    if (id !== idConexao && destino.ws.readyState === 1) {
+                        destino.ws.send(pacoteRepasse);
+                    }
+                }
+                return;
             }
-        }
+
+            if (msg.tipo === 'ENTRAR' && msg.papel) {
+                remetente.papel = msg.papel;
+                remetente.canalId = mapaCanais[msg.papel] ?? 0;
+                console.log(`🎙️ [FSAMP] ${msg.papel} entrou na central.`);
+                enviarListaOnline();
+                ws.send(JSON.stringify({ tipo: 'NO_AR', ativo: estadoNoArAtual }));
+            } else if (msg.tipo === 'PING') {
+                ws.send(JSON.stringify({ tipo: 'PONG' }));
+            } else if (msg.tipo === 'DIAG') {
+                console.log(`🔍 [DIAG] ${msg.papel} | taxa=${msg.taxa} | ctx=${msg.state}`);
+            } else if (msg.tipo === 'NO_AR') {
+                console.log(`🔴 [FSAMP] Comando NO AR: ${msg.ativo ? 'ATIVADO' : 'ENCERRADO'} por ${remetente.papel}`);
+                transmitirEstadoNoAr(msg.ativo);
+            }
+        } catch (e) { }
     });
 
     ws.on('close', () => {
